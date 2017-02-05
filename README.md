@@ -16,6 +16,8 @@ Work in progress, this is nowhere close to being ready.
 
 5. _TODO_ Deploy init
 
+6. CloudFormation or manually create the SQS Queue, ensure ec2 instance has the correct role
+
 # TODO
 
 1. Author init script
@@ -23,3 +25,5 @@ Work in progress, this is nowhere close to being ready.
 2. Author CloudFormation template
 
 3. Implement logging
+
+4. Implement conf file loading for all the parameters
