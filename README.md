@@ -22,8 +22,6 @@ Work in progress, this is nowhere close to being ready.
 
 1. Author init script
 
-2. Author CloudFormation template
+2. Implement logging
 
-3. Implement logging
-
-4. Implement conf file loading for all the parameters
+3. Implement conf file loading for all the parameters

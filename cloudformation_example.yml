@@ -1,0 +1,102 @@
+# A sample cloudformation to bring up the stack for the SQS worker
+#
+Description: "MySQSWorker Stack"
+
+# Parameters section
+Parameters:
+
+    # Keypair for SSH access
+    KeyName:
+        Description: "Name of an existing EC2 KeyPair to enable SSH access to the instance"
+        Type: "AWS::EC2::KeyPair::KeyName"
+        
+    # Subnet
+    SubnetName:
+        Description: "Subnet to launch in"
+        Type: "AWS::EC2::Subnet::Id"
+        
+    # VPC
+    VPCName:
+        Description: "VPC to launch in"
+        Type: "AWS::EC2::VPC::Id"
+
+# Resources section
+Resources:
+
+    # The ec2 instance
+    Ec2Instance:
+        Type: "AWS::EC2::Instance"
+        Properties:
+            KeyName:
+                Ref: "KeyName"
+            InstanceType: "t2.micro"
+            IamInstanceProfile:
+                Ref: SQSQueueInstanceProfile
+            Tags:
+              - Key: "Name"
+                Value: "ec2-instance-mysqsworker"
+
+            # Put this instance on the internet
+            NetworkInterfaces:
+              - AssociatePublicIpAddress: "true"
+                DeviceIndex: "0"
+                GroupSet:
+                  - Ref: SQSInstanceSecurityGroup
+                SubnetId:
+                    Ref: "SubnetName" 
+              
+            # Assume us-east-1 (AMI ID valid as of 5 Feb 2017)
+            ImageId: "ami-0b33d91d"
+
+    # A security group for the instance
+    SQSInstanceSecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            GroupDescription: "sg-mysqsworker"
+            VpcId:
+                Ref: "VPCName"
+            SecurityGroupIngress:
+              - IpProtocol: "tcp"
+                ToPort: "22"
+                FromPort: "22"
+                CidrIp: "0.0.0.0/0"
+            Tags:
+              - Key: "Name"
+                Value: "sg-mysqsworker"
+
+    # The SQS Queue
+    SQSQueue:
+        Type: "AWS::SQS::Queue"
+    
+    # The IAM role/policy for access to the queue
+    SQSQueueIAMRole:
+        Type: "AWS::IAM::Role"
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement: 
+                  - 
+                    Effect: "Allow"
+                    Principal: 
+                        Service: 
+                          - "ec2.amazonaws.com"
+                    Action: 
+                      - "sts:AssumeRole"
+            Policies:
+              -
+                PolicyName: "iam-policy-sqs-worker-queue-access"
+                PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                      -
+                        Effect: "Allow"
+                        Action: "sqs:*"
+                        Resource: "*"
+
+    # The instance profile for the IAM Role
+    SQSQueueInstanceProfile:
+        Type: "AWS::IAM::InstanceProfile"
+        Properties:
+            Roles:
+              -
+                Ref: SQSQueueIAMRole
