@@ -1,21 +1,25 @@
 # mysqsworker
 
+Version 0.1
+
 Work in progress, this is nowhere close to being ready.
 
-# TODO list
-
-1. Author sqsworker as a daemon
-
-2. Author the CF
-
-    a. instance
-    
-    b. sqs queue
-    
-    c. role for instance
-    
-    d. codedeploy?
-
-# Prerequisites
+# Install
     
 1. pip install boto3, daemon, json-rpc, importlib
+
+2. Deploy sqsworker.py
+
+3. Create subdirectory called "modules"
+
+4. Place worker modules and __init__.py into modules directory
+
+5. _TODO_ Deploy init
+
+# TODO
+
+1. Author init script
+
+2. Author CloudFormation template
+
+3. Implement logging

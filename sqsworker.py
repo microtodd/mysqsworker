@@ -8,6 +8,7 @@ import signal
 import os
 import sys
 import importlib
+import json
 
 __VERSION__ = "0.1"
 
@@ -19,9 +20,11 @@ class SQSConsumer(object):
     _visibilityTimeout = 1      #
     _waitTimeSeconds = 20       # Long polling by default
     _queuesToCheck = []         #
-    _dispatchMap = {}           # Used to map json-rpc methods to the function pointers
     _moduleDir = 'modules'      #
-    _loadedClasses = {}         #
+    _loadedClasses = {}         # 'moduleName' => Class()
+    _testMode = True            #
+    _dieFlag = False            #
+    _region = 'us-east-1'       #
     
     ## constructor
     #
@@ -37,6 +40,13 @@ class SQSConsumer(object):
         self.loadWorkers()
         
         # Read queue
+        if self._testMode:
+            self.testQueueRead()
+        else:
+            
+            # Start the work loop
+            while not _dieFlag:
+                self.readQueues()
         
     ## loadWorkers
     #  
@@ -45,7 +55,7 @@ class SQSConsumer(object):
     
         # Iterate the workers dir
         # Dynamically load each class (assume classname matches filename)
-        # each class needs a member parameter that is the "method"
+        # Each class needs a member parameter that is the "method"
         # In the dispatcher dictionary, tie that method to <class>.process( jsonPayload )
         for file in os.listdir(self._moduleDir):
         
@@ -70,29 +80,61 @@ class SQSConsumer(object):
                 
                 # Tie this module/class to the dispatch map
                 opcode = self._loadedClasses[moduleName].methodName
-                self._dispatchMap[opcode] = self._loadedClasses[moduleName].Processor
-                print "Loaded " + file + " class " + thisClass.__class__.__name__ + " with opcode " + str(opcode)
+                dispatcher[opcode] = self._loadedClasses[moduleName].Processor
+                
+                if self._testMode:
+                    print "Loaded " + file + " class " + thisClass.__class__.__name__ + " with opcode " + str(opcode)
 
+    ## testQueueRead
+    #  
+    #  
+    def testQueueRead(self):
+    
+        payload = {
+            "method": "echo",
+            "params": ["echo 1"],
+            "jsonrpc": "2.0",
+            "id": 0
+        }
+        print "testing:" + str(payload)
+        response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
+        print "response:" + str(response.json)
+    
     ## readQueues
     #  
     #  
     def readQueues(self):
-        mySqs = boto3.resource('sqs', region_name='us-east-1')
-        print 'all my queues:'
-        for queue in mySqs.queues.all():
-            print '=> ' + str(queue)
 
-        myQueue = mySqs.get_queue_by_name(QueueName='sqsTest1')
-        
-        # TODO test this....if MaxNumberOfMessages>1 do I actually get >1?
-        myMessages = myQueue.receive_messages(MaxNumberOfMessages=10,WaitTimeSeconds=20,VisibilityTimeout=1,AttributeNames=['All'])
-        for message in myMessages:
-            print 'body=>'+str(message.body)
-            attr = message.attributes
-            print 'sent=>'+str(attr.get('SentTimestamp'))
-            print datetime.datetime.fromtimestamp(float(attr.get('SentTimestamp'))/1000.0)
-            message.delete()
-    
+        # Iterate the queues we should read
+        for queueName in self._queuesToCheck:
+            thisQueue = None
+            try:
+                thisQueue = mySqs.get_queue_by_name(QueueName=queueName)
+                
+                # Poll for messages
+                # TODO test this....if MaxNumberOfMessages>1 do I actually get >1?
+                myMessages = myQueue.receive_messages(MaxNumberOfMessages=10,WaitTimeSeconds=20,VisibilityTimeout=1,AttributeNames=['SentTimestamp'])
+                for message in myMessages:
+                
+                    # Get the message senttime
+                    attr = message.attributes
+                    sentTime = datetime.datetime.fromtimestamp(float(attr.get('SentTimestamp'))/1000.0)
+                
+                    # Send the message to the dispatcher. We assume the body is a json-rpc string.
+                    response = JSONRPCResponseManager.handle(str(message.body),dispatcher)
+                    
+                    # TODO: Log the response, status, and sentTime somewhere
+                    
+                    # TODO: Check for successful response. If message failed then don't delete from queue, but keep a retry-counter
+                    # for the message ID
+                    #
+                    # For now, just always delete the message
+                    message.delete()
+                
+            except Exception as e:
+                print >> sys.stderr, str(e)
+                sys.exit(1)
+
 ## main
 #  
 def main():
@@ -106,11 +148,16 @@ def main():
     
     # Run as a daemon if asked to
     if runAsDaemon:
+    
+        # Handle to worker
+        messageProcessor = None
 
         # Signal handlers
         def sig_term(signal_num, stack_frame):
-            pass
-
+            
+            # If a TERM is received, set the die flag
+            if messageProcessor:
+                messageProcessor._dieFlag = True
     
         # Load pidfile, support multiple versions
         try:
