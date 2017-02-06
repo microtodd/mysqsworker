@@ -35,6 +35,8 @@ queueName       = queueUrl          Queues must have unique names and URLs
 
 ## Plugin modules
 
+See the examples in the 'modules' directory.
+
 To create a plugin module:
 
 1. Name the class the same as the file (without the .py extension)
