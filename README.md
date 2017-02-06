@@ -33,4 +33,18 @@ region              = 'us-east-1'   Defaults to us-east-1
 queueName       = queueUrl          Queues must have unique names and URLs
 ```
 
+## Plugin modules
+
+To create a plugin module:
+
+1. Name the class the same as the file (without the .py extension)
+
+2. Make sure there is a property called 'methodName' which will be the RPC method this is registered to
+
+3. Make sure there is a method called 'Processor' that accepts arguments. It will be the same number of arguments
+   that you expect to receive with that RPC message
+
+## Cloudformation
+
+A cloudformation template is presented as an example of how this stack could be deployed.
 

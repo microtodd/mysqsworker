@@ -8,8 +8,8 @@
 # 4. Create a method in the class called "Processor".  The method should receive one argument, which will
 #    be a list of arguments from the json-rpc call.
 #
-class sampleMod(object):
-    methodName = 'echo'
-    def Processor(self,input):
-        return input
+class sampleModTwo(object):
+    methodName = 'echoTwo'
+    def Processor(self,input1,input2):
+        return input1 + "_" + input2
         

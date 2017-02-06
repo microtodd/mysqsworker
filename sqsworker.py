@@ -116,9 +116,6 @@ class SQSConsumer(object):
                 opcode = self._loadedClasses[moduleName].methodName
                 dispatcher[opcode] = self._loadedClasses[moduleName].Processor
                 
-                if self._testMode:
-                    print "Loaded " + file + " class " + thisClass.__class__.__name__ + " with opcode " + str(opcode)
-
     ## testQueueRead
     #  
     #  
@@ -132,22 +129,32 @@ class SQSConsumer(object):
         }
         print "Test 1:" + str(payload)
         response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
-        print "response:" + str(response.json)
-        if response.error:
-            print "yeah got an error"
-
+        if not response.error:
+            testObj = json.loads(response.json)
+            if testObj['result'] == 'echo 1':
+                print "passed"
+        payload = {
+            "method": "echoTwo",
+            "params": ["echo 1","echo 2"],
+            "jsonrpc": "2.0",
+            "id": 0
+        }
+        print "Test 2:" + str(payload)
+        response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
+        if not response.error:
+            testObj = json.loads(response.json)
+            if testObj['result'] == 'echo 1_echo 2':
+                print "passed"
         payload = {
             "method": "echo1",
             "params": ["echo 1"],
             "jsonrpc": "2.0",
             "id": 0
         }
-        print "Test 2:" + str(payload)
+        print "Test 3:" + str(payload)
         response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
-        print "response:" + str(response.json)
         if response.error:
-            print "yeah got an error"
-
+            print "passed"
     
     ## readQueues
     #  
@@ -161,7 +168,6 @@ class SQSConsumer(object):
                 thisQueue = mySqs.get_queue_by_name(QueueName=queueName)
                 
                 # Poll for messages
-                # TODO test this....if MaxNumberOfMessages>1 do I actually get >1?
                 myMessages = myQueue.receive_messages(MaxNumberOfMessages=1,WaitTimeSeconds=20,VisibilityTimeout=1,AttributeNames=['SentTimestamp'])
                 for message in myMessages:
                 
