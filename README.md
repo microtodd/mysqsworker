@@ -2,9 +2,9 @@
 
 Version 0.1
 
-Work in progress, this is nowhere close to being ready.
+Work in progress, this is sorta ready but hasn't really been tested yet
 
-# Install
+## Install
     
 1. pip install boto3, daemon, json-rpc, importlib
 
@@ -14,14 +14,23 @@ Work in progress, this is nowhere close to being ready.
 
 4. Place worker modules and __init__.py into modules directory
 
-5. _TODO_ Deploy init
+5. Deploy init
 
 6. CloudFormation or manually create the SQS Queue, ensure ec2 instance has the correct role
 
-# TODO
+## Configuration
 
-1. Author init script
+- /etc/sqsworker/sqsworker.cfg (although this location can be overridden with the -f option to the daemon)
 
-2. Implement logging
+```
+[main]
+visibilityTimeout   = 1             Defaults to 1, you probably don't need to change this unless you have a long-running module
+WaitTimeSeconds     = 20            Long polling, max is 20, you probably don't need to change this unless you have a LOT of rpc calls
+testMode            = true          true or false, if true this runs unit tests and exits
+region              = 'us-east-1'   Defaults to us-east-1
 
-3. Implement conf file loading for all the parameters
+[queues]
+queueName       = queueUrl          Queues must have unique names and URLs
+```
+
+

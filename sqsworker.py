@@ -9,6 +9,7 @@ import os
 import sys
 import importlib
 import json
+import ConfigParser
 
 __VERSION__ = "0.1"
 
@@ -22,14 +23,47 @@ class SQSConsumer(object):
     _queuesToCheck = []         #
     _moduleDir = 'modules'      #
     _loadedClasses = {}         # 'moduleName' => Class()
-    _testMode = True            #
+    _testMode = False           #
     _dieFlag = False            #
     _region = 'us-east-1'       #
     
     ## constructor
     #
-    def __init__(self):
-        pass
+    def __init__(self,conf=None):
+
+        # Load conf file, if passed
+        if conf:
+            myConfParser = ConfigParser.ConfigParser()
+            try:
+                myConfParser.read(conf)
+
+                # Options
+                if myConfParser.has_section('main'):
+                    for item in myConfParser.items('main'):
+                        command = item[0]
+                        arg = item[1]
+                        if str(command) == 'visibilitytimeout':
+                            self._visibilityTimeout = int(arg)
+                        elif str(command) == 'waittimeseconds':
+                            self._waitTimeSeconds = int(arg)
+                        elif str(command) == 'testmode':
+                            if str(arg) == 'true':
+                                self._testMode = True
+                        elif str(command) == 'region':
+                            self._region = str(arg)
+
+                # Read queues
+                if myConfParser.has_section('queues'):
+                    for item in myConfParser.items('main'):
+                        command = item[0]
+                        arg = item[1]
+                        self._queuesToCheck.append(str(arg))
+
+            except Exception as e:
+                print >> sys.stderr, str(e)
+                sys.exit(1)
+        else:
+            pass
 
     ## run
     #
@@ -45,7 +79,7 @@ class SQSConsumer(object):
         else:
             
             # Start the work loop
-            while not _dieFlag:
+            while not self._dieFlag:
                 self.readQueues()
         
     ## loadWorkers
@@ -96,9 +130,24 @@ class SQSConsumer(object):
             "jsonrpc": "2.0",
             "id": 0
         }
-        print "testing:" + str(payload)
+        print "Test 1:" + str(payload)
         response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
         print "response:" + str(response.json)
+        if response.error:
+            print "yeah got an error"
+
+        payload = {
+            "method": "echo1",
+            "params": ["echo 1"],
+            "jsonrpc": "2.0",
+            "id": 0
+        }
+        print "Test 2:" + str(payload)
+        response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
+        print "response:" + str(response.json)
+        if response.error:
+            print "yeah got an error"
+
     
     ## readQueues
     #  
@@ -113,7 +162,7 @@ class SQSConsumer(object):
                 
                 # Poll for messages
                 # TODO test this....if MaxNumberOfMessages>1 do I actually get >1?
-                myMessages = myQueue.receive_messages(MaxNumberOfMessages=10,WaitTimeSeconds=20,VisibilityTimeout=1,AttributeNames=['SentTimestamp'])
+                myMessages = myQueue.receive_messages(MaxNumberOfMessages=1,WaitTimeSeconds=20,VisibilityTimeout=1,AttributeNames=['SentTimestamp'])
                 for message in myMessages:
                 
                     # Get the message senttime
@@ -125,11 +174,14 @@ class SQSConsumer(object):
                     
                     # TODO: Log the response, status, and sentTime somewhere
                     
-                    # TODO: Check for successful response. If message failed then don't delete from queue, but keep a retry-counter
-                    # for the message ID
-                    #
-                    # For now, just always delete the message
-                    message.delete()
+                    # Check for successful response. If message failed then don't delete from queue, [TODO]but keep a retry-counter
+                    # for the message ID?
+                    if response.error:
+                        pass # log the error
+
+                    else:
+                        # If no error, then delete the message from the queue
+                        message.delete()
                 
             except Exception as e:
                 print >> sys.stderr, str(e)
@@ -142,9 +194,14 @@ def main():
     # Vars
     runAsDaemon = False
     pidFile = '/var/run/worker.pid'
+    confFile = '/etc/sqsworker/sqsworker.ini'
     
-    # Check command line
-    pass # TODO
+    # Check command line for options file path
+    i = 0
+    for arg in sys.argv:
+        if str(arg) == '-f':
+            confFile = sys.argv[i+1]
+        i += 1
     
     # Run as a daemon if asked to
     if runAsDaemon:
@@ -167,7 +224,7 @@ def main():
         
         with daemon.DaemonContext(pidfile=pidlockfile.TimeoutPIDLockFile(pidFile, 300), signal_map={signal.SIGTERM : sig_term}):
             try:
-                messageProcessor = SQSConsumer()
+                messageProcessor = SQSConsumer(conf=confFile)
                 messageProcessor.run()
         
             except Exception as e:
@@ -175,7 +232,7 @@ def main():
                 sys.exit(1)
     else:
         try:
-            messageProcessor = SQSConsumer()
+            messageProcessor = SQSConsumer(conf=confFile)
             messageProcessor.run()
         except Exception as e:
             print >> sys.stderr, str(e)
