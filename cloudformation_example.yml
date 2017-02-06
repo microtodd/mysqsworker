@@ -24,7 +24,7 @@ Parameters:
 Resources:
 
     # The ec2 instance
-    Ec2Instance:
+    SQSEc2Instance:
         Type: "AWS::EC2::Instance"
         Properties:
             KeyName:
