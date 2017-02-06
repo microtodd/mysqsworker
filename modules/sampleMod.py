@@ -6,7 +6,7 @@
 #    In other words, if you want this class to be registered to the json-rpc method "opcode1", then make
 #    the "methodName" value be "opcode1".
 # 4. Create a method in the class called "Processor".  The method should receive one argument, which will
-#    be a list of arguments from the json-rpc call.
+#    be the argument from the json-rpc call.
 #
 class sampleMod(object):
     methodName = 'echo'
