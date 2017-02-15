@@ -34,6 +34,11 @@ class SQSConsumer(object):
 
         # Load conf file, if passed
         if conf:
+
+            # Ensure file exists
+            if not os.path.isfile(conf):
+                raise Exception("Conf file " + str(conf) + " not found")
+
             myConfParser = ConfigParser.ConfigParser()
             try:
                 myConfParser.read(conf)
@@ -64,7 +69,7 @@ class SQSConsumer(object):
                 logging.error("Error loading config file: " + str(e))
                 sys.exit(1)
         else:
-            pass
+            raise Exception("No conf file specified")
 
     ## run
     #
@@ -243,7 +248,7 @@ def main():
             messageProcessor = SQSConsumer(conf=confFile)
             messageProcessor.run()
         except Exception as e:
-            logging.error("Error running: " + str(e))
+            logging.error("Error running in interactive mode: " + str(e))
             sys.exit(1)
     
 # Main
