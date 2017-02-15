@@ -12,7 +12,7 @@ Work in progress, this is sorta ready but hasn't really been tested yet
 
 3. Create subdirectory called "modules"
 
-4. Place worker modules and __init__.py into modules directory
+4. Place worker modules and \_\_init\_\_.py into modules directory
 
 5. Deploy init
 

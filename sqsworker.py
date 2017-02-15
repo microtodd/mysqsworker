@@ -1,6 +1,6 @@
 ## simple sqs worker
 #
-from jsonrpc import JSONRPCResponseManager, dispatcher
+import jsonrpc          # JSONRPCResponseManager, dispatcher
 import datetime
 import boto3
 import daemon
@@ -10,6 +10,7 @@ import sys
 import importlib
 import json
 import ConfigParser
+import logging
 
 __VERSION__ = "0.1"
 
@@ -60,7 +61,7 @@ class SQSConsumer(object):
                         self._queuesToCheck.append(str(arg))
 
             except Exception as e:
-                print >> sys.stderr, str(e)
+                logging.error("Error loading config file: " + str(e))
                 sys.exit(1)
         else:
             pass
@@ -114,7 +115,7 @@ class SQSConsumer(object):
                 
                 # Tie this module/class to the dispatch map
                 opcode = self._loadedClasses[moduleName].methodName
-                dispatcher[opcode] = self._loadedClasses[moduleName].Processor
+                jsonrpc.dispatcher[opcode] = self._loadedClasses[moduleName].Processor
                 
     ## testQueueRead
     #  
@@ -128,7 +129,7 @@ class SQSConsumer(object):
             "id": 0
         }
         print "Test 1:" + str(payload)
-        response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
+        response = jsonrpc.JSONRPCResponseManager.handle(json.dumps(payload),jsonrpc.dispatcher)
         if not response.error:
             testObj = json.loads(response.json)
             if testObj['result'] == 'echo 1':
@@ -140,7 +141,7 @@ class SQSConsumer(object):
             "id": 0
         }
         print "Test 2:" + str(payload)
-        response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
+        response = jsonrpc.JSONRPCResponseManager.handle(json.dumps(payload),jsonrpc.dispatcher)
         if not response.error:
             testObj = json.loads(response.json)
             if testObj['result'] == 'echo 1_echo 2':
@@ -152,7 +153,7 @@ class SQSConsumer(object):
             "id": 0
         }
         print "Test 3:" + str(payload)
-        response = JSONRPCResponseManager.handle(json.dumps(payload),dispatcher)
+        response = jsonrpc.JSONRPCResponseManager.handle(json.dumps(payload),jsonrpc.dispatcher)
         if response.error:
             print "passed"
     
@@ -176,21 +177,22 @@ class SQSConsumer(object):
                     sentTime = datetime.datetime.fromtimestamp(float(attr.get('SentTimestamp'))/1000.0)
                 
                     # Send the message to the dispatcher. We assume the body is a json-rpc string.
-                    response = JSONRPCResponseManager.handle(str(message.body),dispatcher)
+                    response = jsonrpc.JSONRPCResponseManager.handle(str(message.body),jsonrpc.dispatcher)
                     
-                    # TODO: Log the response, status, and sentTime somewhere
+                    # Log the response, status, and sentTime somewhere
+                    logging.info("Received message at " + str(sentTime) + " : " + str(response))
                     
                     # Check for successful response. If message failed then don't delete from queue, [TODO]but keep a retry-counter
                     # for the message ID?
                     if response.error:
-                        pass # log the error
+                        logging.warning("Received message failed processing: " + str(message.body) + " ::: " + str(response.error))
 
                     else:
                         # If no error, then delete the message from the queue
                         message.delete()
                 
             except Exception as e:
-                print >> sys.stderr, str(e)
+                logging.error("Error reading queue: " + str(e))
                 sys.exit(1)
 
 ## main
@@ -234,14 +236,14 @@ def main():
                 messageProcessor.run()
         
             except Exception as e:
-                print >> sys.stderr, str(e)
+                logging.error("Error running as daemon: " + str(e))
                 sys.exit(1)
     else:
         try:
             messageProcessor = SQSConsumer(conf=confFile)
             messageProcessor.run()
         except Exception as e:
-            print >> sys.stderr, str(e)
+            logging.error("Error running: " + str(e))
             sys.exit(1)
     
 # Main
