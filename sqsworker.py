@@ -87,6 +87,9 @@ class SQSConsumer(object):
             # Start the work loop
             while not self._dieFlag:
                 self.readQueues()
+
+            # signal
+            logging.info("SIGTERM received, shutting down")
         
     ## loadWorkers
     #  
