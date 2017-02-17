@@ -27,7 +27,8 @@ Work in progress, this is sorta ready but hasn't really been tested yet
 visibilityTimeout   = 1             Defaults to 1, you probably don't need to change this unless you have a long-running module
 WaitTimeSeconds     = 20            Long polling, max is 20, you probably don't need to change this unless you have a LOT of rpc calls
 testMode            = true          true or false, if true this runs unit tests and exits
-region              = 'us-east-1'   Defaults to us-east-1
+daemonMode          = true          true or false, if true this runs as a daemon
+region              = us-east-1     Defaults to us-east-1
 
 [queues]
 queueName       = queueUrl          Queues must have unique names and URLs

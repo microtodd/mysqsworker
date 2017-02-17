@@ -3,7 +3,7 @@ visibilityTimeout   = 1
 WaitTimeSeconds     = 20    ; Long polling, max is 20
 testMode            = false ; true|false
 daemonMode          = false ; true|false
-region              = 'us-east-1'
+region              = us-east-1
 
 [queues]
 queueName = queueUrl ; one per queue, queueName must be unique
