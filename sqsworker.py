@@ -12,7 +12,7 @@ import json
 import ConfigParser
 import logging
 
-__VERSION__ = "0.1"
+__VERSION__ = '0.1'
 
 ## SQSConsumer
 #  
@@ -28,6 +28,8 @@ class SQSConsumer(object):
     _daemonMode = False         #
     _dieFlag = False            #
     _region = 'us-east-1'       #
+    _sqsClient = None           # Handle to the AWS SQS object
+    _sqsResource = None
     
     ## constructor
     #
@@ -38,7 +40,7 @@ class SQSConsumer(object):
 
             # Ensure file exists
             if not os.path.isfile(conf):
-                raise Exception("Conf file " + str(conf) + " not found")
+                raise Exception('Conf file ' + str(conf) + ' not found')
 
             myConfParser = ConfigParser.ConfigParser()
             try:
@@ -64,16 +66,18 @@ class SQSConsumer(object):
 
                 # Read queues
                 if myConfParser.has_section('queues'):
-                    for item in myConfParser.items('main'):
+                    for item in myConfParser.items('queues'):
                         command = item[0]
                         arg = item[1]
                         self._queuesToCheck.append(str(arg))
+                else:
+                    logging.warn('No queues found to check in config')
 
             except Exception as e:
-                logging.error("Error loading config file: " + str(e))
+                logging.error('Error loading config file: ' + str(e))
                 sys.exit(1)
         else:
-            raise Exception("No conf file specified")
+            raise Exception('No conf file specified')
 
     ## Properties
 
@@ -93,13 +97,21 @@ class SQSConsumer(object):
         if self._testMode:
             self.testQueueRead()
         else:
+
+            # Get the AWS handle
+            try:
+                self._sqsClient = boto3.client('sqs',region_name=self._region)
+                self._sqsResource = boto3.resource('sqs',region_name=self._region)
+
+            except Exception as e:
+                logging.error('Cannot get AWS SQS handle: ' + str(e))
             
             # Start the work loop
             while not self._dieFlag:
                 self.readQueues()
 
             # signal
-            logging.info("SIGTERM received, shutting down")
+            logging.info('SIGTERM received, shutting down')
         
     ## loadWorkers
     #  
@@ -146,34 +158,34 @@ class SQSConsumer(object):
             "jsonrpc": "2.0",
             "id": 0
         }
-        print "Test 1:" + str(payload)
+        print 'Test 1:' + str(payload)
         response = jsonrpc.JSONRPCResponseManager.handle(json.dumps(payload),jsonrpc.dispatcher)
         if not response.error:
             testObj = json.loads(response.json)
             if testObj['result'] == 'echo 1':
-                print "passed"
+                print 'passed'
         payload = {
             "method": "echoTwo",
             "params": ["echo 1","echo 2"],
             "jsonrpc": "2.0",
             "id": 0
         }
-        print "Test 2:" + str(payload)
+        print 'Test 2:' + str(payload)
         response = jsonrpc.JSONRPCResponseManager.handle(json.dumps(payload),jsonrpc.dispatcher)
         if not response.error:
             testObj = json.loads(response.json)
             if testObj['result'] == 'echo 1_echo 2':
-                print "passed"
+                print 'passed'
         payload = {
             "method": "echo1",
             "params": ["echo 1"],
             "jsonrpc": "2.0",
             "id": 0
         }
-        print "Test 3:" + str(payload)
+        print 'Test 3:' + str(payload)
         response = jsonrpc.JSONRPCResponseManager.handle(json.dumps(payload),jsonrpc.dispatcher)
         if response.error:
-            print "passed"
+            print 'passed'
     
     ## readQueues
     #  
@@ -182,35 +194,39 @@ class SQSConsumer(object):
 
         # Iterate the queues we should read
         for queueName in self._queuesToCheck:
-            thisQueue = None
             try:
-                thisQueue = mySqs.get_queue_by_name(QueueName=queueName)
                 
                 # Poll for messages
-                myMessages = myQueue.receive_messages(MaxNumberOfMessages=1,WaitTimeSeconds=20,VisibilityTimeout=1,AttributeNames=['SentTimestamp'])
-                for message in myMessages:
+                myMessages = self._sqsClient.receive_message(QueueUrl=queueName,\
+                                                             MaxNumberOfMessages=1,\
+                                                             WaitTimeSeconds=self._waitTimeSeconds,\
+                                                             VisibilityTimeout=self._visibilityTimeout,\
+                                                             AttributeNames=['SentTimestamp'])
+
+                for message in myMessages['Messages']:
                 
-                    # Get the message senttime
-                    attr = message.attributes
-                    sentTime = datetime.datetime.fromtimestamp(float(attr.get('SentTimestamp'))/1000.0)
+                    # Get the message metadata
+                    rcptHandle = message['ReceiptHandle']
+                    attr = message['Attributes']['SentTimestamp']
+                    sentTime = datetime.datetime.fromtimestamp(float(attr)/1000.0)
                 
                     # Send the message to the dispatcher. We assume the body is a json-rpc string.
-                    response = jsonrpc.JSONRPCResponseManager.handle(str(message.body),jsonrpc.dispatcher)
+                    response = jsonrpc.JSONRPCResponseManager.handle(str(message['Body']),jsonrpc.dispatcher)
                     
                     # Log the response, status, and sentTime somewhere
-                    logging.info("Received message at " + str(sentTime) + " : " + str(response))
+                    logging.info('Received message at ' + str(sentTime) + ' : ' + str(response))
                     
                     # Check for successful response. If message failed then don't delete from queue, [TODO]but keep a retry-counter
                     # for the message ID?
                     if response.error:
-                        logging.warning("Received message failed processing: " + str(message.body) + " ::: " + str(response.error))
+                        logging.warning('Received message failed processing: ' + str(message['Body']) + ' ::: ' + str(response.error))
 
                     else:
                         # If no error, then delete the message from the queue
-                        message.delete()
+                        self._sqsClient.delete_message(QueueUrl=queueName,ReceiptHandle=rcptHandle)
                 
             except Exception as e:
-                logging.error("Error reading queue: " + str(e))
+                logging.error('Error reading queue: ' + str(e))
                 sys.exit(1)
 
 ## main
@@ -233,7 +249,7 @@ def main():
     messageProcessor = SQSConsumer(conf=confFile)
 
     # Run as a daemon if asked to
-    if messageProcessor.daemonMode::
+    if messageProcessor.daemonMode:
     
         # Signal handlers
         def sig_term(signal_num, stack_frame):
@@ -253,16 +269,16 @@ def main():
                 messageProcessor.run()
         
             except Exception as e:
-                logging.error("Error running as daemon: " + str(e))
+                logging.error('Error running as daemon: ' + str(e))
                 sys.exit(1)
     else:
         try:
             messageProcessor.run()
         except Exception as e:
-            logging.error("Error running in interactive mode: " + str(e))
+            logging.error('Error running in interactive mode: ' + str(e))
             sys.exit(1)
     
 # Main
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
     
