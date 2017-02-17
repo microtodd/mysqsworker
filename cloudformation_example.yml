@@ -1,0 +1,117 @@
+# A sample cloudformation to bring up the stack for the SQS worker
+#
+Description: "MySQSWorker Stack"
+
+# Parameters section
+Parameters:
+
+    # Keypair for SSH access
+    pKeyName:
+        Description: "Name of an existing EC2 KeyPair to enable SSH access to the instance"
+        Type: "AWS::EC2::KeyPair::KeyName"
+        
+    # Subnet
+    pSubnetName:
+        Description: "Subnet to launch in"
+        Type: "AWS::EC2::Subnet::Id"
+        
+    # VPC
+    pVPCName:
+        Description: "VPC to launch in"
+        Type: "AWS::EC2::VPC::Id"
+
+    # Test
+    pFilePath:
+        Description: "Path of a test userdata output file"
+        Type: "String"
+        Default: "/home/ec2-user/userdata"
+
+# Resources section
+Resources:
+
+    # The ec2 instance
+    rSQSEc2Instance:
+        Type: "AWS::EC2::Instance"
+        Properties:
+            KeyName:
+                Ref: pKeyName
+            InstanceType: "t2.micro"
+            IamInstanceProfile:
+                Ref: rSQSQueueInstanceProfile
+            Tags:
+              - Key: "Name"
+                Value: "ec2-instance-mysqsworker"
+
+            # Put this instance on the internet
+            NetworkInterfaces:
+              - AssociatePublicIpAddress: "true"
+                DeviceIndex: "0"
+                GroupSet:
+                  - Ref: rSQSInstanceSecurityGroup
+                SubnetId:
+                    Ref: pSubnetName
+              
+            # Assume us-east-1 (AMI ID valid as of 5 Feb 2017)
+            ImageId: "ami-0b33d91d"
+
+            # Bootstrap
+            UserData:
+                Fn::Base64: !Sub |
+                    #!/bin/bash
+                    echo "Testing userdata" > ${pFilePath}
+                    yum -y install git
+                    pip install boto3 daemon json-rpc importlib
+                    git clone -b dev https://github.com/microtodd/mysqsworker
+
+    # A security group for the instance
+    rSQSInstanceSecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            GroupDescription: "sg-mysqsworker"
+            VpcId:
+                Ref: pVPCName
+            SecurityGroupIngress:
+              - IpProtocol: "tcp"
+                ToPort: "22"
+                FromPort: "22"
+                CidrIp: "0.0.0.0/0"
+            Tags:
+              - Key: "Name"
+                Value: "sg-mysqsworker"
+
+    # The SQS Queue
+    rSQSQueue:
+        Type: "AWS::SQS::Queue"
+    
+    # The IAM role/policy for access to the queue
+    rSQSQueueIAMRole:
+        Type: "AWS::IAM::Role"
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement: 
+                  - 
+                    Effect: "Allow"
+                    Principal: 
+                        Service: 
+                          - "ec2.amazonaws.com"
+                    Action: 
+                      - "sts:AssumeRole"
+            Policies:
+              -
+                PolicyName: "iam-policy-sqs-worker-queue-access"
+                PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                      -
+                        Effect: "Allow"
+                        Action: "sqs:*"
+                        Resource: "*"
+
+    # The instance profile for the IAM Role
+    rSQSQueueInstanceProfile:
+        Type: "AWS::IAM::InstanceProfile"
+        Properties:
+            Roles:
+              -
+                Ref: rSQSQueueIAMRole
