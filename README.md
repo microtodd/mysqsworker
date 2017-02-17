@@ -2,8 +2,6 @@
 
 Version 0.1
 
-Work in progress, this is sorta ready but hasn't really been tested yet
-
 ## Install
     
 1. pip install boto3, daemon, json-rpc, importlib
