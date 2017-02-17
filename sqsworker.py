@@ -25,6 +25,7 @@ class SQSConsumer(object):
     _moduleDir = 'modules'      #
     _loadedClasses = {}         # 'moduleName' => Class()
     _testMode = False           #
+    _daemonMode = False         #
     _dieFlag = False            #
     _region = 'us-east-1'       #
     
@@ -55,6 +56,9 @@ class SQSConsumer(object):
                         elif str(command) == 'testmode':
                             if str(arg) == 'true':
                                 self._testMode = True
+                        elif str(command) == 'daemonmode':
+                            if str(arg) == 'true':
+                                self._daemonMode = True
                         elif str(command) == 'region':
                             self._region = str(arg)
 
@@ -70,6 +74,12 @@ class SQSConsumer(object):
                 sys.exit(1)
         else:
             raise Exception("No conf file specified")
+
+    ## Properties
+
+    @property
+    def daemonMode(self):
+        return self._daemonMode
 
     ## run
     #
@@ -208,7 +218,6 @@ class SQSConsumer(object):
 def main():
     
     # Vars
-    runAsDaemon = False
     pidFile = '/var/run/worker.pid'
     confFile = '/etc/sqsworker/sqsworker.ini'
     
@@ -219,12 +228,13 @@ def main():
             confFile = sys.argv[i+1]
         i += 1
     
-    # Run as a daemon if asked to
-    if runAsDaemon:
-    
-        # Handle to worker
-        messageProcessor = None
+    # Handle to worker
+    messageProcessor = None
+    messageProcessor = SQSConsumer(conf=confFile)
 
+    # Run as a daemon if asked to
+    if messageProcessor.daemonMode::
+    
         # Signal handlers
         def sig_term(signal_num, stack_frame):
             
@@ -240,7 +250,6 @@ def main():
         
         with daemon.DaemonContext(pidfile=pidlockfile.TimeoutPIDLockFile(pidFile, 300), signal_map={signal.SIGTERM : sig_term}):
             try:
-                messageProcessor = SQSConsumer(conf=confFile)
                 messageProcessor.run()
         
             except Exception as e:
@@ -248,7 +257,6 @@ def main():
                 sys.exit(1)
     else:
         try:
-            messageProcessor = SQSConsumer(conf=confFile)
             messageProcessor.run()
         except Exception as e:
             logging.error("Error running in interactive mode: " + str(e))
